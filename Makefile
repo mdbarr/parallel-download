@@ -2,7 +2,7 @@ all: parallel-download
 
 .PHONY: docker
 
-parallel-download:
+parallel-download: main.go go.mod go.sum
 	go build -o parallel-download
 
 docker:

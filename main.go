@@ -21,6 +21,7 @@ type Worker struct {
 	Url       string
 	File      *os.File
 	Count     int64
+	Config    map[string]string
 	SyncWG    sync.WaitGroup
 	TotalSize int64
 	Progress
@@ -32,13 +33,29 @@ type Progress struct {
 }
 
 func main() {
-	var t = flag.Bool("t", false, "file name with datetime")
-	var worker_count = flag.Int64("c", 5, "connection count")
+	var config map[string]string
+
+	var config_file string
+	var concurrency int64
+	var silent bool
+
+	flag.StringVar(&config_file, "config", "", "config file")
+	flag.Int64Var(&concurrency, "c", 5, "connection count")
+	flag.BoolVar(&silent, "s", false, "silent")
+
 	flag.Parse()
 
-	var download_url string
-	fmt.Print("Please enter a URL: ")
-	fmt.Scanf("%s", &download_url)
+	if (!silent) {
+		fmt.Printf("Config file %s\n", config_file)
+	}
+
+	if (len(flag.Args()) == 0) {
+		fmt.Println("No URL specified")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	var download_url = flag.Arg(0)
 
 	// Get header from the url
 	log.Println("Url:", download_url)
@@ -46,12 +63,8 @@ func main() {
 	handleError(err)
 	log.Printf("File size: %d bytes\n", file_size)
 
-	var file_path string
-	if *t {
-		file_path = filepath.Dir(os.Args[0]) + string(filepath.Separator) + strconv.FormatInt(time.Now().UnixNano(), 10) + "_" + getFileName(download_url)
-	} else {
-		file_path = filepath.Dir(os.Args[0]) + string(filepath.Separator) + getFileName(download_url)
-	}
+	var file_path string = filepath.Dir(os.Args[0]) + string(filepath.Separator) + getFileName(download_url)
+
 	log.Printf("Local path: %s\n", file_path)
 	f, err := os.OpenFile(file_path, os.O_CREATE|os.O_RDWR, 0666)
 	handleError(err)
@@ -61,12 +74,13 @@ func main() {
 	var worker = Worker{
 		Url:       download_url,
 		File:      f,
-		Count:     *worker_count,
+		Count:     concurrency,
+		Config:    config,
 		TotalSize: file_size,
 	}
 
 	var start, end int64
-	var partial_size = int64(file_size / *worker_count)
+	var partial_size = int64(file_size / concurrency)
 	now := time.Now().UTC()
 	for num := int64(0); num < worker.Count; num++ {
 		// New sub progress bar (give it 0 at first for new instance and assign real size later on.)
